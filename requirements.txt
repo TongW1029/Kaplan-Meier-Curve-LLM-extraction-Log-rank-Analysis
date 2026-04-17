@@ -1,0 +1,2 @@
+# This project only uses Python standard library modules.
+# The file is intentionally kept so Render's default build command succeeds.
