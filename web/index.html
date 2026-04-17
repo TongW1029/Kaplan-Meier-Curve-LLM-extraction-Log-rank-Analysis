@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KM Curve LLM Demo</title>
+  <style>
+    :root {
+      --bg: #f5f1e8;
+      --panel: #fffdf8;
+      --line: #d8cdbb;
+      --text: #2c2419;
+      --muted: #6e6558;
+      --accent: #1f6f5f;
+      --accent-2: #a5402d;
+      --shadow: 0 16px 40px rgba(44, 36, 25, 0.08);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Georgia, "Times New Roman", serif;
+      background:
+        radial-gradient(circle at top left, rgba(31, 111, 95, 0.15), transparent 35%),
+        radial-gradient(circle at bottom right, rgba(165, 64, 45, 0.12), transparent 30%),
+        var(--bg);
+      color: var(--text);
+    }
+    .page { width: min(1120px, calc(100% - 32px)); margin: 32px auto 48px; }
+    .hero, .panel {
+      background: rgba(255, 253, 248, 0.9);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(6px);
+    }
+    .hero { padding: 32px; margin-bottom: 20px; }
+    .hero h1 {
+      margin: 0 0 12px;
+      font-size: clamp(2rem, 4vw, 3.5rem);
+      line-height: 1.05;
+      letter-spacing: -0.03em;
+    }
+    .hero p { max-width: 780px; margin: 0; font-size: 1.05rem; color: var(--muted); line-height: 1.7; }
+    .grid { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 20px; margin-top: 20px; }
+    .panel { padding: 24px; }
+    h2 { margin-top: 0; font-size: 1.4rem; }
+    .sub { margin: -4px 0 18px; color: var(--muted); line-height: 1.6; }
+    label { display: block; margin-bottom: 8px; font-weight: 700; }
+    input, textarea, button { font: inherit; }
+    input[type="text"], input[type="password"], input[type="number"], textarea {
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--text);
+    }
+    textarea { min-height: 260px; resize: vertical; }
+    .native-file-input {
+      height: 1px;
+      opacity: 0;
+      position: absolute;
+      width: 1px;
+    }
+    .file-picker {
+      align-items: center;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .file-button {
+      background: #efe6d7;
+      border-radius: 999px;
+      color: var(--text);
+      cursor: pointer;
+      margin-bottom: 0;
+      padding: 10px 16px;
+    }
+    .file-name {
+      color: var(--muted);
+    }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+    .stack { display: flex; flex-direction: column; gap: 14px; }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+    button {
+      border: 0;
+      border-radius: 999px;
+      padding: 12px 18px;
+      cursor: pointer;
+      transition: transform 0.15s ease, opacity 0.15s ease;
+    }
+    button:hover { transform: translateY(-1px); }
+    .primary { background: var(--accent); color: #fff; }
+    .secondary { background: #efe6d7; color: var(--text); }
+    .danger { background: var(--accent-2); color: #fff; }
+    .status, .result-card {
+      border-radius: 18px;
+      padding: 16px;
+      margin-top: 14px;
+      background: #fff;
+      border: 1px solid var(--line);
+    }
+    .status { color: var(--muted); }
+    .error { color: #8a1f1f; border-color: #d9a4a4; background: #fff0f0; }
+    .good { color: #1f5c4f; border-color: #9bc9bc; background: #eef8f5; }
+    .summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+    .metric { padding: 14px; border-radius: 18px; background: #faf6ef; border: 1px solid var(--line); }
+    .metric strong { display: block; margin-bottom: 8px; }
+    .plot-wrap { margin-top: 18px; background: #fff; border: 1px solid var(--line); border-radius: 18px; padding: 14px; }
+    svg { width: 100%; height: 320px; display: block; }
+    table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 0.95rem; }
+    th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid #ece2d3; }
+    .tiny { color: var(--muted); font-size: 0.92rem; line-height: 1.6; }
+    code { background: #f4ecdf; padding: 2px 6px; border-radius: 8px; }
+    @media (max-width: 900px) {
+      .grid, .row, .summary-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <section class="hero">
+      <h1>Kaplan-Meier Curve<br>LLM extraction & Log-rank Analysis</h1>
+      <h2>Tong Wu (tow4004)</h2>
+      <p>
+        Summary: First, upload a KM curve image and use the LLM API to extract approximate <code>time</code> and <code>event</code> 
+        data; then automatically perform a log-rank test based on the extracted results. 
+        In the end, you can also tackle the indirect comparison in the bonus questions.
+      </p>
+    </section>
+
+    <div class="grid">
+      <section class="panel">
+        <h2>1. LLM Extraction</h2>
+        <p class="sub">If you don't have an API Key, you can click "Load Sample Data" first.</p>
+        <div class="stack">
+          <div>
+            <label for="image">Upload the KM curve image</label>
+            <div class="file-picker">
+              <input id="image" class="native-file-input" type="file" accept=".png,.jpg,.jpeg,.webp,.gif">
+              <label class="file-button" for="image">Choose File</label>
+              <span id="fileName" class="file-name">No file selected</span>
+            </div>
+          </div>
+          <div class="row">
+            <div>
+              <label for="groupA">Group A</label>
+              <input id="groupA" type="text" value="Treatment A">
+            </div>
+            <div>
+              <label for="groupB">Group B</label>
+              <input id="groupB" type="text" value="Treatment B">
+            </div>
+          </div>
+          <div>
+            <label for="apiKey">OpenAI API Key</label>
+            <input id="apiKey" type="password" placeholder="You can use sample data if there are no images available.">
+          </div>
+          <div class="row">
+            <div>
+              <label for="baseUrl">Base URL</label>
+              <input id="baseUrl" type="text" value="https://api.openai.com/v1">
+            </div>
+            <div>
+              <label for="model">Model</label>
+              <input id="model" type="text" value="gpt-4.1-mini">
+            </div>
+          </div>
+        </div>
+        <div class="actions">
+          <button class="primary" id="extractBtn">Upload the image and extract</button>
+          <button class="secondary" id="sampleBtn">Load Sample Data</button>
+          <button class="danger" id="formatBtn">Format JSON</button>
+        </div>
+        <div id="extractStatus" class="status">The extraction status will be displayed here.</div>
+        <div style="margin-top: 18px;">
+          <label for="jsonBox">Extraction Result JSON</label>
+          <p>Since the data extracted by LLM from images may contain errors, please conduct manual review.</p>
+          <textarea id="jsonBox" spellcheck="false"></textarea>
+        </div>
+        <div class="actions">
+          <button class="primary" id="analyzeBtn">Calculate Log-rank based on JSON</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>2. Result</h2>
+        <p class="sub">The system will display two sets of sample sizes, numbers of events, 
+          and numbers of censored cases, as well as the results of the log-rank test.</p>
+        <div id="resultArea" class="status">No analysis results available. Please load sample data or upload an image first.</div>
+        <div class="plot-wrap">
+          <svg id="kmPlot" viewBox="0 0 700 320" aria-label="KM plot"></svg>
+        </div>
+      </section>
+    </div>
+
+    <div class="grid">
+      <section class="panel">
+        <h2>3. Bonus Question: Indirect Comparison of A vs C</h2>
+        <p class="sub">
+          If you can find the HR and 95% CI for <code>A vs B</code> and <code>B vs C</code> in the literature, 
+          the Bucher method will be used here to approximately derive <code>A vs C</code>.
+        </p>
+        <div class="row">
+          <div>
+            <label for="hrAB">HR(A vs B)</label>
+            <input id="hrAB" type="number" step="0.0001" value="0.82">
+          </div>
+          <div>
+            <label for="lowAB">Lower limit of 95% CI</label>
+            <input id="lowAB" type="number" step="0.0001" value="0.70">
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label for="highAB">Upper limit of 95% CI</label>
+            <input id="highAB" type="number" step="0.0001" value="0.96">
+          </div>
+          <div></div>
+        </div>
+        <div class="row">
+          <div>
+            <label for="hrBC">HR(B vs C)</label>
+            <input id="hrBC" type="number" step="0.0001" value="0.88">
+          </div>
+          <div>
+            <label for="lowBC">Lower limit of 95% CI</label>
+            <input id="lowBC" type="number" step="0.0001" value="0.74">
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label for="highBC">Upper limit of 95% CI</label>
+            <input id="highBC" type="number" step="0.0001" value="1.05">
+          </div>
+          <div></div>
+        </div>
+        <div class="actions">
+          <button class="primary" id="indirectBtn">Calculate A vs C</button>
+        </div>
+        <div id="indirectArea" class="status">The indirect comparison results will be displayed here.</div>
+      </section>
+
+      <section class="panel">
+        <h2>4. Hint</h2>
+        <div class="tiny">
+          <p><strong>time</strong>: Follow-up time, meaning how long the patient has been observed.</p>
+          <p><strong>event = 1</strong>: The event has occurred, such as death or recurrence.</p>
+          <p><strong>event = 0</strong>: Censored observation. Follow-up ended before the event was observed.</p>
+          <p><strong>log-rank test</strong>: Compares whether the two survival curves differ significantly.</p>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    const jsonBox = document.getElementById("jsonBox");
+    const extractStatus = document.getElementById("extractStatus");
+    const resultArea = document.getElementById("resultArea");
+    const indirectArea = document.getElementById("indirectArea");
+    const kmPlot = document.getElementById("kmPlot");
+    const imageInput = document.getElementById("image");
+    const fileName = document.getElementById("fileName");
+
+    function setStatus(target, message, kind = "") {
+      target.className = `status ${kind}`.trim();
+      target.textContent = message;
+    }
+
+    function prettyJson(value) {
+      return JSON.stringify(value, null, 2);
+    }
+
+    async function loadSample() {
+      setStatus(extractStatus, "Loading sample data...");
+      const response = await fetch("/api/sample");
+      const data = await response.json();
+      jsonBox.value = prettyJson(data);
+      setStatus(extractStatus, 'The sample data has been loaded. You can now directly click "Calculate Log-rank based on JSON".', "good");
+    }
+
+    async function extractWithLlm() {
+      const imageFile = imageInput.files[0];
+      if (!imageFile) {
+        setStatus(extractStatus, "Please select a KM curve image first.", "error");
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append("image", imageFile);
+      formData.append("api_key", document.getElementById("apiKey").value.trim());
+      formData.append("base_url", document.getElementById("baseUrl").value.trim());
+      formData.append("model", document.getElementById("model").value.trim());
+      formData.append("group_a_name", document.getElementById("groupA").value.trim());
+      formData.append("group_b_name", document.getElementById("groupB").value.trim());
+
+      setStatus(extractStatus, "The LLM is analyzing the image, please wait for 10 to 60 seconds...");
+      const response = await fetch("/api/extract", { method: "POST", body: formData });
+      const data = await response.json();
+      if (!response.ok) {
+        setStatus(extractStatus, data.error || "Extraction failed", "error");
+        return;
+      }
+
+      jsonBox.value = prettyJson(data);
+      setStatus(extractStatus, "Image extraction completed. Please check the JSON before conducting statistical analysis.", "good");
+    }
+
+    function renderPlot(curves) {
+      const width = 700;
+      const height = 320;
+      const left = 60;
+      const right = 20;
+      const top = 20;
+      const bottom = 45;
+      const plotWidth = width - left - right;
+      const plotHeight = height - top - bottom;
+
+      if (!curves || !curves.length) {
+        kmPlot.innerHTML = "";
+        return;
+      }
+
+      const allTimes = curves.flatMap(curve => curve.points.map(point => point.time));
+      const maxTime = Math.max(...allTimes, 1);
+      const colors = ["#1f6f5f", "#a5402d"];
+      const x = (value) => left + (value / maxTime) * plotWidth;
+      const y = (value) => top + (1 - value) * plotHeight;
+
+      const axis = `
+        <line x1="${left}" y1="${top}" x2="${left}" y2="${top + plotHeight}" stroke="#6e6558" stroke-width="1.2" />
+        <line x1="${left}" y1="${top + plotHeight}" x2="${left + plotWidth}" y2="${top + plotHeight}" stroke="#6e6558" stroke-width="1.2" />
+        <text x="${left}" y="${top + plotHeight + 30}" fill="#6e6558">0</text>
+        <text x="${left + plotWidth - 10}" y="${top + plotHeight + 30}" fill="#6e6558">${maxTime.toFixed(1)}</text>
+        <text x="12" y="${top + 10}" fill="#6e6558">1.0</text>
+        <text x="12" y="${top + plotHeight + 4}" fill="#6e6558">0.0</text>
+        <text x="${left + plotWidth / 2 - 38}" y="${height - 8}" fill="#6e6558">Follow-up time</text>
+        <text x="8" y="${top + plotHeight / 2}" fill="#6e6558" transform="rotate(-90 8 ${top + plotHeight / 2})">Survival</text>
+      `;
+
+      const paths = curves.map((curve, index) => {
+        const d = curve.points
+          .map((point, pointIndex) => `${pointIndex === 0 ? "M" : "L"} ${x(point.time)} ${y(point.survival)}`)
+          .join(" ");
+        return `<path d="${d}" fill="none" stroke="${colors[index % colors.length]}" stroke-width="3" />`;
+      }).join("");
+
+      const legends = curves.map((curve, index) => {
+        const color = colors[index % colors.length];
+        const lx = left + index * 180;
+        const ly = top + 16;
+        return `
+          <line x1="${lx}" y1="${ly}" x2="${lx + 30}" y2="${ly}" stroke="${color}" stroke-width="3" />
+          <text x="${lx + 38}" y="${ly + 4}" fill="#2c2419">${curve.name}</text>
+        `;
+      }).join("");
+
+      kmPlot.innerHTML = axis + paths + legends;
+    }
+
+    function renderAnalysis(data) {
+      const logRank = data.log_rank;
+      const summaries = data.summaries.map((item) => `
+        <div class="metric">
+          <strong>${item.name}</strong>
+          <div>Sample Size: ${item.total}</div>
+          <div>Number of Events: ${item.events}</div>
+          <div>Number of Censors: ${item.censored}</div>
+          <div>Maximum Time: ${item.max_time}</div>
+        </div>
+      `).join("");
+
+      const tableRows = logRank.table.map((row) => `
+        <tr>
+          <td>${row.time}</td>
+          <td>${row.risk_a}</td>
+          <td>${row.risk_b}</td>
+          <td>${row.events_a}</td>
+          <td>${row.events_b}</td>
+          <td>${row.expected_a}</td>
+          <td>${row.variance_piece}</td>
+        </tr>
+      `).join("");
+
+      resultArea.className = "result-card";
+      resultArea.innerHTML = `
+        <div><strong>Study:</strong> ${data.study_title}</div>
+        <div class="tiny" style="margin-top: 8px;">${data.note || "No note."}</div>
+        <div class="summary-grid">${summaries}</div>
+        <div class="metric" style="margin-top: 14px;">
+          <strong>Log-rank result</strong>
+          <div>Observed(A): ${logRank.observed_a}</div>
+          <div>Expected(A): ${logRank.expected_a}</div>
+          <div>Variance: ${logRank.variance}</div>
+          <div>Z: ${logRank.z_score}</div>
+          <div>Chi-square: ${logRank.chi_square}</div>
+          <div>p-value: ${logRank.p_value}</div>
+          <div>Conclusion: ${logRank.decision}</div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Risk A</th>
+              <th>Risk B</th>
+              <th>Event A</th>
+              <th>Event B</th>
+              <th>Expected A</th>
+              <th>Var piece</th>
+            </tr>
+          </thead>
+          <tbody>${tableRows}</tbody>
+        </table>
+      `;
+
+      renderPlot(data.km_curves);
+    }
+
+    async function analyzeJson() {
+      let payload;
+      try {
+        payload = JSON.parse(jsonBox.value);
+      } catch (error) {
+        setStatus(resultArea, 'The JSON format is incorrect. Please click "Format JSON" first or check the commas and brackets.', "error");
+        return;
+      }
+
+      setStatus(resultArea, "Calculating log-rank...");
+      const response = await fetch("/api/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        setStatus(resultArea, data.error || "Analysis failed", "error");
+        return;
+      }
+      renderAnalysis(data);
+    }
+
+    async function indirectCompare() {
+      const payload = {
+        hr_ab: document.getElementById("hrAB").value,
+        low_ab: document.getElementById("lowAB").value,
+        high_ab: document.getElementById("highAB").value,
+        hr_bc: document.getElementById("hrBC").value,
+        low_bc: document.getElementById("lowBC").value,
+        high_bc: document.getElementById("highBC").value
+      };
+
+      setStatus(indirectArea, "Calculating A vs C...");
+      const response = await fetch("/api/indirect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        setStatus(indirectArea, data.error || "Calculation failed", "error");
+        return;
+      }
+
+      indirectArea.className = "result-card";
+      indirectArea.innerHTML = `
+        <strong>Indirect comparison result</strong>
+        <div style="margin-top: 8px;">HR(A vs C): ${data.hr_ac}</div>
+        <div>95% CI: ${data.low_ac} to ${data.high_ac}</div>
+        <div>Z: ${data.z_score}</div>
+        <div>p-value: ${data.p_value}</div>
+      `;
+    }
+
+    document.getElementById("sampleBtn").addEventListener("click", loadSample);
+    document.getElementById("extractBtn").addEventListener("click", extractWithLlm);
+    document.getElementById("analyzeBtn").addEventListener("click", analyzeJson);
+    document.getElementById("indirectBtn").addEventListener("click", indirectCompare);
+    imageInput.addEventListener("change", () => {
+      fileName.textContent = imageInput.files[0] ? imageInput.files[0].name : "No file selected";
+    });
+    document.getElementById("formatBtn").addEventListener("click", () => {
+      try {
+        jsonBox.value = prettyJson(JSON.parse(jsonBox.value));
+        setStatus(extractStatus, "The JSON has been formatted.", "good");
+      } catch (error) {
+        setStatus(extractStatus, "The current content is not valid JSON and cannot be formatted temporarily.", "error");
+      }
+    });
+
+    loadSample();
+  </script>
+</body>
+</html>
